@@ -18,11 +18,14 @@ import {
 import { getAdminSettings, getStats, putSettings } from '../controllers/adminSettingsController';
 import { requireAdmin } from '../middleware/auth';
 import { uploadProductImages } from '../middleware/upload';
+import adminAccountRoutes from './adminAccountRoutes';
 
 const router = Router();
 
 // Every route below requires a valid Supabase token AND an admin_roles entry.
 router.use(requireAdmin);
+
+router.use('/accounts', adminAccountRoutes);
 
 router.get('/stats', getStats);
 

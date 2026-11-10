@@ -16,17 +16,20 @@ This project uses Cloudflare Pages for the React frontend, Render for the Expres
 3. Open **SQL Editor** and run these committed files, in this order:
    - `supabase/migrations/20261105120000_initial_schema.sql`
    - `supabase/migrations/20261105120100_store_settings_and_storage.sql`
+   - `supabase/migrations/20261110130000_admin_onboarding.sql`
 4. Optionally run `supabase/seed.sql` to add the starter categories and blank store settings. It does not create products.
 5. In **Storage**, verify that the public `product-images` bucket exists. The second migration creates/configures it.
 
 ## 2. Deploy the API to Render
 
 1. In Render, choose **New → Blueprint** and connect this GitHub repository. Render detects the root `render.yaml`.
-2. Create the `grubbix-warehouse-api` web service. The Blueprint builds from `backend/`, runs `npm ci && npm run build`, starts with `npm start`, and checks `/api/health`.
+2. Create the `grubbix-warehouse-api` web service. The Blueprint builds from `backend/`, runs `npm ci --include=dev && npm run build`, starts with `npm start`, and checks `/api/health`.
 3. Add the requested environment values in Render:
    - `SUPABASE_URL`: the Supabase project URL.
    - `SUPABASE_ANON_KEY`: the publishable/anon key.
    - `SUPABASE_SERVICE_ROLE_KEY`: the secret/service-role key.
+   - `PASSWORD_RESET_REDIRECT_URL`: the full frontend callback URL, e.g. `https://grubbix-warehouse.vercel.app/admin/reset-password`.
+   - `ADMIN_INVITE_REDIRECT_URL`: the full frontend invite callback URL, e.g. `https://grubbix-warehouse.vercel.app/admin/accept-invite`.
 4. Wait for the first deploy to complete. Open `https://<your-render-service>.onrender.com/api/health`; the response should contain `"status":"ok"`. Save the service URL.
 
 Render supplies `PORT` at runtime. The Blueprint sets `NODE_ENV=production` and the matching Node.js version. Do not set `PORT` yourself.
@@ -54,7 +57,20 @@ The committed `frontend/public/_redirects` file routes frontend paths such as `/
 
 Do not use `*` for `CORS_ORIGINS` on a live site. Preview deployments have distinct origins; only add preview origins you intend to trust.
 
-## 5. Create the first administrator
+## Password recovery email setup
+
+The admin login includes a **Forgot password?** link. Password recovery uses Supabase Auth's built-in email delivery; this project does not use Resend.
+
+1. In Supabase, open **Authentication → URL Configuration**.
+2. Set **Site URL** to the frontend origin, e.g. `https://grubbix-warehouse.vercel.app`.
+3. Add the exact callback URL `https://grubbix-warehouse.vercel.app/admin/reset-password` to **Redirect URLs**. For local testing, also allow `http://localhost:5173/admin/reset-password`.
+4. In Render, set `PASSWORD_RESET_REDIRECT_URL` to the same production callback URL. The value must match a Supabase allowed redirect.
+5. Redeploy the API after changing the Render environment variable. The frontend reset and forgot-password routes are included in the normal frontend build.
+6. Submit an admin email at `/admin/forgot-password`, open the email, follow its link, and set a new password. The app shows a generic confirmation whether or not an account exists for the submitted email.
+
+Supabase's built-in email service has strict sending limits and is intended mainly for development/testing. For production email delivery, configure a custom SMTP provider in Supabase Auth; it can be any SMTP provider and does not have to be Resend.
+
+## 5. Create the first owner
 
 Run the existing admin setup script locally. It uses the service key to create a confirmed Supabase Auth user and grant the owner role; never run it in frontend code.
 

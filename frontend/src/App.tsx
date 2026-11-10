@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import AdminLayout from './components/admin/AdminLayout';
+import OwnerRoute from './components/admin/OwnerRoute';
 import ProtectedRoute from './components/admin/ProtectedRoute';
 import PublicLayout from './components/layout/PublicLayout';
 import { AuthProvider } from './hooks/useAuth';
@@ -8,7 +9,11 @@ import Catalog from './pages/Catalog';
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
 import ProductDetails from './pages/ProductDetails';
+import AdminForgotPassword from './pages/admin/AdminForgotPassword';
+import AdminAcceptInvite from './pages/admin/AdminAcceptInvite';
+import AdminAccounts from './pages/admin/AdminAccounts';
 import AdminLogin from './pages/admin/AdminLogin';
+import AdminResetPassword from './pages/admin/AdminResetPassword';
 import Dashboard from './pages/admin/Dashboard';
 
 export default function App() {
@@ -25,10 +30,16 @@ export default function App() {
             </Route>
 
             <Route path="admin/login" element={<AdminLogin />} />
+            <Route path="admin/forgot-password" element={<AdminForgotPassword />} />
+            <Route path="admin/reset-password" element={<AdminResetPassword />} />
+            <Route path="admin/accept-invite" element={<AdminAcceptInvite />} />
 
             <Route path="admin" element={<ProtectedRoute />}>
               <Route element={<AdminLayout />}>
                 <Route index element={<Dashboard />} />
+                <Route element={<OwnerRoute />}>
+                  <Route path="accounts" element={<AdminAccounts />} />
+                </Route>
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Route>

@@ -17,7 +17,7 @@ export const supabasePublic = createClient(
 
 /**
  * Service-role client. Server-side only — it must never be exposed to the
- * browser. Administrative access is always gated by requireAdmin first.
+ * browser. Administrative access is gated by authorization middleware.
  */
 export const supabaseAdmin = createClient(
   env.SUPABASE_URL,

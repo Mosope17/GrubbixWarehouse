@@ -9,12 +9,12 @@ async function resolveAdmin(token: string): Promise<AdminUser | null> {
 
   const { data: role, error: roleError } = await supabaseAdmin
     .from('admin_roles')
-    .select('role')
+    .select('role, is_active')
     .eq('user_id', data.user.id)
     .maybeSingle();
 
   if (roleError) throw new ApiError(500, 'ROLE_LOOKUP_FAILED', 'Could not verify administrator access.');
-  if (!role) return null;
+  if (!role || !role.is_active) return null;
 
   return {
     id: data.user.id,
@@ -41,4 +41,16 @@ export const requireAdmin: RequestHandler = (req, _res, next) => {
       next();
     })
     .catch(next);
+};
+
+export const requireOwner: RequestHandler = (req, _res, next) => {
+  if (!req.admin) {
+    next(ApiError.unauthorized());
+    return;
+  }
+  if (req.admin.role !== 'owner') {
+    next(ApiError.forbidden('Only an owner can manage administrator accounts.'));
+    return;
+  }
+  next();
 };

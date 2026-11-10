@@ -2,6 +2,7 @@ import type {
   AdminSession,
   Category,
   DashboardStats,
+  ManagedAdmin,
   Paginated,
   Product,
   ProductImage,
@@ -22,6 +23,57 @@ export function login(email: string, password: string): Promise<AdminSession> {
   return apiRequest<AdminSession>('/api/auth/login', {
     method: 'POST',
     body: { email, password },
+  });
+}
+
+export function requestPasswordReset(email: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/api/auth/password-reset', {
+    method: 'POST',
+    body: { email },
+  });
+}
+
+export function confirmPasswordReset(
+  accessToken: string,
+  refreshToken: string,
+  password: string,
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/api/auth/password-reset/confirm', {
+    method: 'POST',
+    body: { accessToken, refreshToken, password },
+  });
+}
+
+export function acceptAdminInvite(
+  accessToken: string,
+  refreshToken: string,
+  password: string,
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/api/auth/invite/accept', {
+    method: 'POST',
+    body: { accessToken, refreshToken, password },
+  });
+}
+
+export async function fetchAdminAccounts(): Promise<ManagedAdmin[]> {
+  const data = await apiRequest<{ accounts: ManagedAdmin[] }>('/api/admin/accounts', {
+    auth: true,
+  });
+  return data.accounts;
+}
+
+export function inviteAdmin(email: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/api/admin/accounts/invites', {
+    method: 'POST',
+    body: { email },
+    auth: true,
+  });
+}
+
+export function deleteAdminAccount(id: string): Promise<void> {
+  return apiRequest<void>(`/api/admin/accounts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    auth: true,
   });
 }
 

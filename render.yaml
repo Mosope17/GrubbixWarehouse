@@ -17,6 +17,10 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: PASSWORD_RESET_REDIRECT_URL
+        sync: false
+      - key: ADMIN_INVITE_REDIRECT_URL
+        sync: false
       - key: SUPABASE_STORAGE_BUCKET
         value: product-images
       - key: CORS_ORIGINS

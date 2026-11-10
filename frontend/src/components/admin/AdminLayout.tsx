@@ -51,6 +51,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             {link.label}
           </NavLink>
         ))}
+        {session?.admin.role === 'owner' && (
+          <NavLink to="/admin/accounts" className={linkClass} onClick={onNavigate}>
+            Administrator accounts
+          </NavLink>
+        )}
       </nav>
 
       <div className="border-t border-neutral-200 p-3">

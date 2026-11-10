@@ -44,6 +44,11 @@ export type AdminUser = {
   role: string;
 };
 
+export type ManagedAdmin = AdminUser & {
+  isActive: boolean;
+  createdAt: string;
+};
+
 export type AdminSession = {
   accessToken: string;
   refreshToken: string;

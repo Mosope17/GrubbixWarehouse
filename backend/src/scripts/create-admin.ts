@@ -69,7 +69,7 @@ async function main() {
 
   const { error: roleError } = await supabase
     .from('admin_roles')
-    .upsert({ user_id: userId, role: 'owner' }, { onConflict: 'user_id' });
+    .upsert({ user_id: userId, role: 'owner', is_active: true }, { onConflict: 'user_id' });
 
   if (roleError) {
     console.error(`Could not grant administrator access: ${roleError.message}`);
