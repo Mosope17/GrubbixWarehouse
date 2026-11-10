@@ -1,0 +1,467 @@
+From 9a52ad5f02ce0be11b0dddc392119abb26fa4079 Mon Sep 17 00:00:00 2001
+From: theTemple10 <oluwatimileyinakinremi@gmail.com>
+Date: Mon, 9 Nov 2026 15:44:46 +0100
+Subject: [PATCH] Prepare app for Cloudflare, Render, and Supabase deployment
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+---
+ DEPLOYMENT.md              | 101 +++++++++++++++++++++++++
+ backend/.env.example       |   9 +++
+ backend/package-lock.json  | 151 +++++--------------------------------
+ backend/package.json       |   4 +-
+ frontend/.env.example      |   1 +
+ frontend/public/_redirects |   1 +
+ render.yaml                |  23 ++++++
+ 7 files changed, 155 insertions(+), 135 deletions(-)
+ create mode 100644 DEPLOYMENT.md
+ create mode 100644 backend/.env.example
+ create mode 100644 frontend/.env.example
+ create mode 100644 frontend/public/_redirects
+ create mode 100644 render.yaml
+
+diff --git a/DEPLOYMENT.md b/DEPLOYMENT.md
+new file mode 100644
+index 0000000..2732ba7
+--- /dev/null
++++ b/DEPLOYMENT.md
+@@ -0,0 +1,101 @@
++# Deploy Grubbix Warehouse
++
++This project uses Cloudflare Pages for the React frontend, Render for the Express API, and Supabase for Postgres, authentication, and product-image storage.
++
++## Before you start
++
++- Push the repository to GitHub.
++- Create accounts for Cloudflare, Render, and Supabase.
++- Use Node.js `26.13.0` locally, matching the repository's `.nvmrc`.
++- Keep the Supabase service-role/secret key private. Never add it to a `VITE_*` variable or expose it in frontend code.
++
++## 1. Create and configure Supabase
++
++1. Create a Supabase project and choose a database password and region.
++2. In **Project Settings → API** (or **API Keys**), copy the project URL, the publishable/anon key, and the secret/service-role key. The backend needs all three.
++3. Open **SQL Editor** and run these committed files, in this order:
++   - `supabase/migrations/20261105120000_initial_schema.sql`
++   - `supabase/migrations/20261105120100_store_settings_and_storage.sql`
++4. Optionally run `supabase/seed.sql` to add the starter categories and blank store settings. It does not create products.
++5. In **Storage**, verify that the public `product-images` bucket exists. The second migration creates/configures it.
++
++## 2. Deploy the API to Render
++
++1. In Render, choose **New → Blueprint** and connect this GitHub repository. Render detects the root `render.yaml`.
++2. Create the `grubbix-warehouse-api` web service. The Blueprint builds from `backend/`, runs `npm ci && npm run build`, starts with `npm start`, and checks `/api/health`.
++3. Add the requested environment values in Render:
++   - `SUPABASE_URL`: the Supabase project URL.
++   - `SUPABASE_ANON_KEY`: the publishable/anon key.
++   - `SUPABASE_SERVICE_ROLE_KEY`: the secret/service-role key.
++4. Wait for the first deploy to complete. Open `https://<your-render-service>.onrender.com/api/health`; the response should contain `"status":"ok"`. Save the service URL.
++
++Render supplies `PORT` at runtime. The Blueprint sets `NODE_ENV=production` and the matching Node.js version. Do not set `PORT` yourself.
++The Blueprint temporarily allows only the local development origin. Replace it with the Pages origin in step 4 before using the live frontend.
++
++## 3. Deploy the frontend to Cloudflare Pages
++
++1. In Cloudflare, choose **Workers & Pages → Create → Pages → Connect to Git** and select this repository.
++2. Set the build configuration:
++   - **Root directory:** `frontend`
++   - **Build command:** `npm run build`
++   - **Build output directory:** `dist`
++3. Add the build environment variable `VITE_API_BASE_URL` with the full Render service URL, for example `https://<your-render-service>.onrender.com` (no trailing slash). It is embedded in the frontend at build time, so add it to both Production and Preview environments if both should work.
++4. Set `NODE_VERSION` to `26.13.0` in the Pages build environment, then save and deploy.
++5. Open the generated `https://<your-project>.pages.dev` site and save its exact origin.
++
++The committed `frontend/public/_redirects` file routes frontend paths such as `/catalog` and `/admin/login` back to the SPA entry point, so refreshing a nested route works.
++
++## 4. Allow the frontend to call the API
++
++1. In Render, open the API service's **Environment** settings.
++2. Set `CORS_ORIGINS` to the exact Cloudflare Pages origin, without a trailing slash. For multiple trusted origins, separate them with commas, e.g. `https://shop.example.com,https://grubbix-warehouse.pages.dev`.
++3. Save the change and wait for Render to redeploy.
++4. Test the home page, catalogue, product details, and `/api/health`. If using a custom domain, add its exact `https://` origin to `CORS_ORIGINS` as well.
++
++Do not use `*` for `CORS_ORIGINS` on a live site. Preview deployments have distinct origins; only add preview origins you intend to trust.
++
++## 5. Create the first administrator
++
++Run the existing admin setup script locally. It uses the service key to create a confirmed Supabase Auth user and grant the owner role; never run it in frontend code.
++
++1. In a terminal, create `backend/.env` from `backend/.env.example` and fill in the Supabase URL and keys. This file is ignored by Git.
++2. From the repository root, install the backend dependencies if needed:
++
++   ```sh
++   cd backend
++   npm ci
++   ```
++
++3. Create the admin account (macOS/Linux shell):
++
++   ```sh
++   ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='use-a-strong-unique-password' npm run admin:create
++   ```
++
++   In PowerShell, set `$env:ADMIN_EMAIL` and `$env:ADMIN_PASSWORD`, run `npm run admin:create`, then remove both variables from the session.
++4. Sign in at `https://<your-project>.pages.dev/admin/login`.
++
++## Local development
++
++Create `backend/.env` and `frontend/.env` from their `.env.example` files, put your Supabase values in the backend file, and then run each app in its own terminal:
++
++```sh
++cd backend
++npm ci
++npm run dev
++```
++
++```sh
++cd frontend
++npm ci
++npm run dev
++```
++
++The frontend template targets the API at `http://localhost:4000`; the backend template permits the Vite origin at `http://localhost:5173`.
++
++## Updating the live site
++
++- Push frontend or backend changes to the connected Git branch; Cloudflare Pages and Render build from that branch.
++- For database changes, apply new SQL migrations to the Supabase project before deploying code that depends on them.
++- Change environment variables in the corresponding service dashboard, not in committed files.
++- After changing `VITE_API_BASE_URL`, trigger a new Cloudflare Pages build because Vite embeds it at build time.
+diff --git a/backend/.env.example b/backend/.env.example
+new file mode 100644
+index 0000000..367232f
+--- /dev/null
++++ b/backend/.env.example
+@@ -0,0 +1,9 @@
++NODE_ENV=development
++PORT=4000
++SUPABASE_URL=https://your-project.supabase.co
++SUPABASE_ANON_KEY=your-supabase-publishable-or-anon-key
++SUPABASE_SERVICE_ROLE_KEY=your-supabase-secret-or-service-role-key
++SUPABASE_STORAGE_BUCKET=product-images
++CORS_ORIGINS=http://localhost:5173
++MAX_UPLOAD_MB=5
++LOG_LEVEL=info
+diff --git a/backend/package-lock.json b/backend/package-lock.json
+index 8ff6624..456b9c3 100644
+--- a/backend/package-lock.json
++++ b/backend/package-lock.json
+@@ -13,10 +13,10 @@
+         "dotenv": "^17.2.3",
+         "express": "^4.21.2",
+         "helmet": "^8.1.0",
+-        "multer": "^1.4.5-lts.2",
++        "multer": "^2.5.0",
+         "pino": "^9.13.1",
+         "pino-http": "^10.5.0",
+-        "zod": "^3.25.76"
++        "zod": "^4.6.7"
+       },
+       "devDependencies": {
+         "@types/cors": "^2.8.19",
+@@ -25,6 +25,9 @@
+         "@types/node": "^22.18.8",
+         "tsx": "^4.20.6",
+         "typescript": "~5.9.3"
++      },
++      "engines": {
++        "node": ">=22.12.0"
+       }
+     },
+     "node_modules/@esbuild/aix-ppc64": {
+@@ -763,12 +766,6 @@
+         "npm": "1.2.8000 || >= 1.4.16"
+       }
+     },
+-    "node_modules/buffer-from": {
+-      "version": "1.1.2",
+-      "resolved": "https://registry.npmjs.org/buffer-from/-/buffer-from-1.1.2.tgz",
+-      "integrity": "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==",
+-      "license": "MIT"
+-    },
+     "node_modules/busboy": {
+       "version": "1.6.0",
+       "resolved": "https://registry.npmjs.org/busboy/-/busboy-1.6.0.tgz",
+@@ -818,21 +815,6 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
+-    "node_modules/concat-stream": {
+-      "version": "1.6.2",
+-      "resolved": "https://registry.npmjs.org/concat-stream/-/concat-stream-1.6.2.tgz",
+-      "integrity": "sha512-27HBghJxjiZtIk3Ycvn/4kbJk/1uZuJFfuPEns6LaEvpvG1f0hTea8lilrouyo9mVc2GWdcEZ8OLoGmSADlrCw==",
+-      "engines": [
+-        "node >= 0.8"
+-      ],
+-      "license": "MIT",
+-      "dependencies": {
+-        "buffer-from": "^1.0.0",
+-        "inherits": "^2.0.3",
+-        "readable-stream": "^2.2.2",
+-        "typedarray": "^0.0.6"
+-      }
+-    },
+     "node_modules/content-disposition": {
+       "version": "0.5.4",
+       "resolved": "https://registry.npmjs.org/content-disposition/-/content-disposition-0.5.4.tgz",
+@@ -869,12 +851,6 @@
+       "integrity": "sha512-NXdYc3dLr47pBkpUCHtKSwIOQXLVn8dZEuywboCOJY/osA0wFSLlSawr3KN8qXJEyX66FcONTH8EIlVuK0yyFA==",
+       "license": "MIT"
+     },
+-    "node_modules/core-util-is": {
+-      "version": "1.0.3",
+-      "resolved": "https://registry.npmjs.org/core-util-is/-/core-util-is-1.0.3.tgz",
+-      "integrity": "sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==",
+-      "license": "MIT"
+-    },
+     "node_modules/cors": {
+       "version": "2.8.6",
+       "resolved": "https://registry.npmjs.org/cors/-/cors-2.8.6.tgz",
+@@ -1308,12 +1284,6 @@
+         "node": ">= 0.10"
+       }
+     },
+-    "node_modules/isarray": {
+-      "version": "1.0.0",
+-      "resolved": "https://registry.npmjs.org/isarray/-/isarray-1.0.0.tgz",
+-      "integrity": "sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ==",
+-      "license": "MIT"
+-    },
+     "node_modules/math-intrinsics": {
+       "version": "1.1.0",
+       "resolved": "https://registry.npmjs.org/math-intrinsics/-/math-intrinsics-1.1.0.tgz",
+@@ -1383,27 +1353,6 @@
+         "node": ">= 0.6"
+       }
+     },
+-    "node_modules/minimist": {
+-      "version": "1.2.8",
+-      "resolved": "https://registry.npmjs.org/minimist/-/minimist-1.2.8.tgz",
+-      "integrity": "sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==",
+-      "license": "MIT",
+-      "funding": {
+-        "url": "https://github.com/sponsors/ljharb"
+-      }
+-    },
+-    "node_modules/mkdirp": {
+-      "version": "0.5.6",
+-      "resolved": "https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.6.tgz",
+-      "integrity": "sha512-FP+p8RB8OWpF3YZBCrP5gtADmtXApB5AMLn+vdyA+PyxCjrCs00mjyUozssO33cwDeT3wNGdLxJ5M//YqtHAJw==",
+-      "license": "MIT",
+-      "dependencies": {
+-        "minimist": "^1.2.6"
+-      },
+-      "bin": {
+-        "mkdirp": "bin/cmd.js"
+-      }
+-    },
+     "node_modules/ms": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/ms/-/ms-2.0.0.tgz",
+@@ -1411,22 +1360,21 @@
+       "license": "MIT"
+     },
+     "node_modules/multer": {
+-      "version": "1.4.5-lts.2",
+-      "resolved": "https://registry.npmjs.org/multer/-/multer-1.4.5-lts.2.tgz",
+-      "integrity": "sha512-VzGiVigcG9zUAoCNU+xShztrlr1auZOlurXynNvO9GiWD1/mTBbUljOKY+qMeazBqXgRnjzeEgJI/wyjJUHg9A==",
+-      "deprecated": "Multer 1.x is impacted by a number of vulnerabilities, which have been patched in 2.x. You should upgrade to the latest 2.x version.",
++      "version": "2.5.0",
++      "resolved": "https://registry.npmjs.org/multer/-/multer-2.5.0.tgz",
++      "integrity": "sha512-BsqOzYGVq49JcW2IzoSAxeKYRevb+dGGPPWleOR8Lrlk4igwxu1/9pwSXlByhCb7MVZDrNJFC0IBP5/O5nLYRw==",
+       "license": "MIT",
+       "dependencies": {
+         "append-field": "^1.0.0",
+-        "busboy": "^1.0.0",
+-        "concat-stream": "^1.5.2",
+-        "mkdirp": "^0.5.4",
+-        "object-assign": "^4.1.1",
+-        "type-is": "^1.6.4",
+-        "xtend": "^4.0.0"
++        "busboy": "^1.6.0",
++        "type-is": "^1.6.18"
+       },
+       "engines": {
+-        "node": ">= 6.0.0"
++        "node": ">= 10.16.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/express"
+       }
+     },
+     "node_modules/negotiator": {
+@@ -1548,12 +1496,6 @@
+       "integrity": "sha512-BndPH67/JxGExRgiX1dX0w1FvZck5Wa4aal9198SrRhZjH3GxKQUKIBnYJTdj2HDN3UQAS06HlfcSbQj2OHmaw==",
+       "license": "MIT"
+     },
+-    "node_modules/process-nextick-args": {
+-      "version": "2.0.1",
+-      "resolved": "https://registry.npmjs.org/process-nextick-args/-/process-nextick-args-2.0.1.tgz",
+-      "integrity": "sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==",
+-      "license": "MIT"
+-    },
+     "node_modules/process-warning": {
+       "version": "5.1.1",
+       "resolved": "https://registry.npmjs.org/process-warning/-/process-warning-5.1.1.tgz",
+@@ -1633,27 +1575,6 @@
+         "node": ">= 0.8"
+       }
+     },
+-    "node_modules/readable-stream": {
+-      "version": "2.3.8",
+-      "resolved": "https://registry.npmjs.org/readable-stream/-/readable-stream-2.3.8.tgz",
+-      "integrity": "sha512-8p0AUk4XODgIewSi0l8Epjs+EVnWiK7NoDIEGU0HhE7+ZyY8D1IMY7odu5lRrFXGg71L15KG8QrPmum45RTtdA==",
+-      "license": "MIT",
+-      "dependencies": {
+-        "core-util-is": "~1.0.0",
+-        "inherits": "~2.0.3",
+-        "isarray": "~1.0.0",
+-        "process-nextick-args": "~2.0.0",
+-        "safe-buffer": "~5.1.1",
+-        "string_decoder": "~1.1.1",
+-        "util-deprecate": "~1.0.1"
+-      }
+-    },
+-    "node_modules/readable-stream/node_modules/safe-buffer": {
+-      "version": "5.1.2",
+-      "resolved": "https://registry.npmjs.org/safe-buffer/-/safe-buffer-5.1.2.tgz",
+-      "integrity": "sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==",
+-      "license": "MIT"
+-    },
+     "node_modules/real-require": {
+       "version": "0.2.0",
+       "resolved": "https://registry.npmjs.org/real-require/-/real-require-0.2.0.tgz",
+@@ -1856,21 +1777,6 @@
+         "node": ">=10.0.0"
+       }
+     },
+-    "node_modules/string_decoder": {
+-      "version": "1.1.1",
+-      "resolved": "https://registry.npmjs.org/string_decoder/-/string_decoder-1.1.1.tgz",
+-      "integrity": "sha512-n/ShnvDi6FHbbVfviro+WojiFzv+s8MPMHBczVePfUpDJLwoLT0ht1l4YwBCbi8pJAveEEdnkHyPyTP/mzRfwg==",
+-      "license": "MIT",
+-      "dependencies": {
+-        "safe-buffer": "~5.1.0"
+-      }
+-    },
+-    "node_modules/string_decoder/node_modules/safe-buffer": {
+-      "version": "5.1.2",
+-      "resolved": "https://registry.npmjs.org/safe-buffer/-/safe-buffer-5.1.2.tgz",
+-      "integrity": "sha512-Gd2UZBJDkXlY7GbJxfsE8/nvKkUEU1G38c1siN6QP6a9PT9MmHB8GnpscSmMJSoF8LOIrt8ud/wPtojys4G6+g==",
+-      "license": "MIT"
+-    },
+     "node_modules/thread-stream": {
+       "version": "3.2.0",
+       "resolved": "https://registry.npmjs.org/thread-stream/-/thread-stream-3.2.0.tgz",
+@@ -1927,12 +1833,6 @@
+         "node": ">= 0.6"
+       }
+     },
+-    "node_modules/typedarray": {
+-      "version": "0.0.6",
+-      "resolved": "https://registry.npmjs.org/typedarray/-/typedarray-0.0.6.tgz",
+-      "integrity": "sha512-/aCDEGatGvZ2BIk+HmLf4ifCJFwvKFNb9/JeZPMulfgFracn9QFcAf5GO8B/mweUjSoblS5In0cWhqpfs/5PQA==",
+-      "license": "MIT"
+-    },
+     "node_modules/typescript": {
+       "version": "5.9.3",
+       "resolved": "https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz",
+@@ -1963,12 +1863,6 @@
+         "node": ">= 0.8"
+       }
+     },
+-    "node_modules/util-deprecate": {
+-      "version": "1.0.2",
+-      "resolved": "https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz",
+-      "integrity": "sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==",
+-      "license": "MIT"
+-    },
+     "node_modules/utils-merge": {
+       "version": "1.0.1",
+       "resolved": "https://registry.npmjs.org/utils-merge/-/utils-merge-1.0.1.tgz",
+@@ -1987,19 +1881,10 @@
+         "node": ">= 0.8"
+       }
+     },
+-    "node_modules/xtend": {
+-      "version": "4.0.2",
+-      "resolved": "https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz",
+-      "integrity": "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==",
+-      "license": "MIT",
+-      "engines": {
+-        "node": ">=0.4"
+-      }
+-    },
+     "node_modules/zod": {
+-      "version": "3.25.76",
+-      "resolved": "https://registry.npmjs.org/zod/-/zod-3.25.76.tgz",
+-      "integrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==",
++      "version": "4.6.7",
++      "resolved": "https://registry.npmjs.org/zod/-/zod-4.6.7.tgz",
++      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==",
+       "license": "MIT",
+       "funding": {
+         "url": "https://github.com/sponsors/colinhacks"
+diff --git a/backend/package.json b/backend/package.json
+index 82f0b64..466eba7 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -20,10 +20,10 @@
+     "dotenv": "^17.2.3",
+     "express": "^4.21.2",
+     "helmet": "^8.1.0",
+-    "multer": "^1.4.5-lts.2",
++    "multer": "^2.5.0",
+     "pino": "^9.13.1",
+     "pino-http": "^10.5.0",
+-    "zod": "^3.25.76"
++    "zod": "^4.6.7"
+   },
+   "devDependencies": {
+     "@types/cors": "^2.8.19",
+diff --git a/frontend/.env.example b/frontend/.env.example
+new file mode 100644
+index 0000000..ddde050
+--- /dev/null
++++ b/frontend/.env.example
+@@ -0,0 +1 @@
++VITE_API_BASE_URL=http://localhost:4000
+diff --git a/frontend/public/_redirects b/frontend/public/_redirects
+new file mode 100644
+index 0000000..7797f7c
+--- /dev/null
++++ b/frontend/public/_redirects
+@@ -0,0 +1 @@
++/* /index.html 200
+diff --git a/render.yaml b/render.yaml
+new file mode 100644
+index 0000000..2232de6
+--- /dev/null
++++ b/render.yaml
+@@ -0,0 +1,23 @@
++services:
++  - type: web
++    name: grubbix-warehouse-api
++    runtime: node
++    rootDir: backend
++    buildCommand: npm ci && npm run build
++    startCommand: npm start
++    healthCheckPath: /api/health
++    envVars:
++      - key: NODE_VERSION
++        value: 26.13.0
++      - key: NODE_ENV
++        value: production
++      - key: SUPABASE_URL
++        sync: false
++      - key: SUPABASE_ANON_KEY
++        sync: false
++      - key: SUPABASE_SERVICE_ROLE_KEY
++        sync: false
++      - key: SUPABASE_STORAGE_BUCKET
++        value: product-images
++      - key: CORS_ORIGINS
++        value: http://localhost:5173
+-- 
+2.43.0
+
