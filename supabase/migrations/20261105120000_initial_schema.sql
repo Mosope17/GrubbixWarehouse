@@ -18,6 +18,19 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- admin_roles
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.admin_roles (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  role text not null default 'admin' check (role in ('admin', 'owner')),
+  created_at timestamptz not null default now()
+);
+
+comment on table public.admin_roles is
+  'Administrators allowed to use the admin portal. Rows are created with the service role only.';
+
 -- Security definer so that policies can check administrator membership without
 -- recursing through the admin_roles RLS policy.
 create or replace function public.is_admin()
@@ -33,19 +46,6 @@ as $$
 $$;
 
 grant execute on function public.is_admin() to anon, authenticated;
-
--- ---------------------------------------------------------------------------
--- admin_roles
--- ---------------------------------------------------------------------------
-
-create table if not exists public.admin_roles (
-  user_id uuid primary key references auth.users (id) on delete cascade,
-  role text not null default 'admin' check (role in ('admin', 'owner')),
-  created_at timestamptz not null default now()
-);
-
-comment on table public.admin_roles is
-  'Administrators allowed to use the admin portal. Rows are created with the service role only.';
 
 alter table public.admin_roles enable row level security;
 
