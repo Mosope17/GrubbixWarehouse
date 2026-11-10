@@ -15,6 +15,10 @@ import AdminAccounts from './pages/admin/AdminAccounts';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminResetPassword from './pages/admin/AdminResetPassword';
 import Dashboard from './pages/admin/Dashboard';
+import AdminCategories from './pages/admin/AdminCategories';
+import AdminProductEditor from './pages/admin/AdminProductEditor';
+import AdminProducts from './pages/admin/AdminProducts';
+import AdminSettings from './pages/admin/AdminSettings';
 
 export default function App() {
   return (
@@ -37,6 +41,11 @@ export default function App() {
             <Route path="admin" element={<ProtectedRoute />}>
               <Route element={<AdminLayout />}>
                 <Route index element={<Dashboard />} />
+                <Route path="products" element={<AdminProducts />} />
+                <Route path="products/new" element={<AdminProductEditor />} />
+                <Route path="products/:id" element={<AdminProductEditor />} />
+                <Route path="categories" element={<AdminCategories />} />
+                <Route path="settings" element={<AdminSettings />} />
                 <Route element={<OwnerRoute />}>
                   <Route path="accounts" element={<AdminAccounts />} />
                 </Route>
