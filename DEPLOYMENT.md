@@ -17,6 +17,7 @@ This project uses Cloudflare Pages for the React frontend, Render for the Expres
    - `supabase/migrations/20261105120000_initial_schema.sql`
    - `supabase/migrations/20261105120100_store_settings_and_storage.sql`
    - `supabase/migrations/20261110130000_admin_onboarding.sql`
+   - `supabase/migrations/20261110140000_register_admin_invite.sql`
 4. Optionally run `supabase/seed.sql` to add the starter categories and blank store settings. It does not create products.
 5. In **Storage**, verify that the public `product-images` bucket exists. The second migration creates/configures it.
 
@@ -69,6 +70,13 @@ The admin login includes a **Forgot password?** link. Password recovery uses Sup
 6. Submit an admin email at `/admin/forgot-password`, open the email, follow its link, and set a new password. The app shows a generic confirmation whether or not an account exists for the submitted email.
 
 Supabase's built-in email service has strict sending limits and is intended mainly for development/testing. For production email delivery, configure a custom SMTP provider in Supabase Auth; it can be any SMTP provider and does not have to be Resend.
+
+## Admin invitation email setup
+
+1. In Supabase, open **Authentication → URL Configuration** and add `https://grubbix-warehouse.vercel.app/admin/accept-invite` to **Redirect URLs**. Set **Site URL** to `https://grubbix-warehouse.vercel.app` (not a localhost address).
+2. In Render, set `ADMIN_INVITE_REDIRECT_URL` to exactly `https://grubbix-warehouse.vercel.app/admin/accept-invite`.
+3. Apply the latest Supabase migration, `20261110140000_register_admin_invite.sql`, and redeploy the backend before retrying invitations.
+4. If an earlier failed invite email was sent, ask the invitee to ignore it; the backend may have removed that pending account during cleanup. Send a fresh invitation after the migration and redeploy.
 
 ## 5. Create the first owner
 
