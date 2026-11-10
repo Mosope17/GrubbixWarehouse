@@ -62,10 +62,8 @@ export async function inviteAdmin(email: string): Promise<void> {
     );
   }
 
-  const { error: roleError } = await supabaseAdmin.from('admin_roles').insert({
-    user_id: data.user.id,
-    role: 'admin',
-    is_active: false,
+  const { error: roleError } = await supabaseAdmin.rpc('register_pending_admin_invite', {
+    invited_user_id: data.user.id,
   });
 
   if (roleError) {
